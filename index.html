@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tap the Target</title>
+  <meta name="theme-color" content="#0f1220" />
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="app_icon_512.png">
+  <style>
+    :root {
+      --bg: #0f1220;
+      --panel: #151a2f;
+      --text: #e9ecff;
+      --accent: #7aa2ff;
+      --good: #5af59d;
+      --bad: #ff7a93;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%; margin: 0;
+      background: radial-gradient(1200px 800px at 70% -10%, #1b2142 0%, var(--bg) 60%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .wrap { max-width: 800px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; height: 100%; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    h1 { margin: 0; font-size: clamp(20px, 4vw, 28px); letter-spacing: 0.5px; }
+    .btn { border: 0; border-radius: 12px; padding: 12px 16px; background: linear-gradient(180deg, #89a8ff, var(--accent));
+           color: #0b0f1f; font-weight: 700; font-size: 16px; cursor: pointer; box-shadow: 0 6px 16px rgba(122,162,255,0.35); }
+    .btn:active { transform: translateY(1px) scale(0.99); }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .card { background: linear-gradient(180deg, #1c2242, var(--panel)); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 10px 12px; text-align: center; }
+    .label { opacity: 0.7; font-size: 12px; }
+    .value { font-size: 22px; font-weight: 800; margin-top: 4px; }
+    .board { position: relative; flex: 1 1 auto; background: radial-gradient(600px 300px at 10% 0%, rgba(255,255,255,0.05), transparent 60%),
+             linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0)); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; overflow: hidden; }
+    .grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 28px 28px; pointer-events: none; }
+    .target { position: absolute; width: 72px; height: 72px; border-radius: 999px;
+      background:
+        radial-gradient(circle at 65% 35%, rgba(255,255,255,0.8) 0 8px, transparent 10px),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.15) 0 30%, transparent 31%),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.12) 0 50%, transparent 51%),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.08) 0 70%, transparent 71%),
+        linear-gradient(180deg, #9bf7c8, var(--good));
+      box-shadow: 0 8px 20px rgba(90,245,157,0.35), inset 0 -4px 12px rgba(0,0,0,0.25);
+      display: grid; place-items: center; color: #062114; font-weight: 900; letter-spacing: 0.5px;
+      transform: translate(-50%, -50%) scale(1); transition: transform 0.08s ease; touch-action: none; }
+    .target:active { transform: translate(-50%, -50%) scale(0.97); }
+    .pop { animation: pop 220ms ease; }
+    @keyframes pop { 0%{transform:translate(-50%,-50%) scale(0.85); opacity:0.7;} 60%{transform:translate(-50%,-50%) scale(1.08); opacity:1;} 100%{transform:translate(-50%,-50%) scale(1);} }
+    .overlay { position: absolute; inset: 0; display: grid; place-items: center;
+      background: linear-gradient(180deg, rgba(15,18,32,0.2), rgba(15,18,32,0.65));
+      backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+      opacity: 0; pointer-events: none; transition: opacity 180ms ease; }
+    .overlay.show { opacity: 1; pointer-events: auto; }
+    .modal { background: linear-gradient(180deg, #1b2142, #12152a); border: 1px solid rgba(255,255,255,0.09); border-radius: 16px; padding: 18px; max-width: 520px; width: calc(100% - 32px); box-shadow: 0 18px 40px rgba(0,0,0,0.35); text-align: center; }
+    .title { font-weight: 900; font-size: 20px; margin-bottom: 8px; }
+    .subtitle { opacity: 0.85; }
+    .footer { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; margin-top: 12px; }
+    .progress { height: 10px; border-radius: 999px; background: rgba(255,255,255,0.12); overflow: hidden; }
+    .bar { height: 100%; width: 100%; background: linear-gradient(90deg, var(--good), #a0d1ff, var(--bad)); transform-origin: left; transform: scaleX(1); transition: transform 0.2s linear; }
+    @media (max-width: 480px) { .target { width: 64px; height: 64px; } .value{ font-size:20px; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🎯 Tap the Target</h1>
+      <button id="startBtn" class="btn" aria-label="Start game">Start</button>
+    </header>
+
+    <div class="stats">
+      <div class="card"><div class="label">Score</div><div id="score" class="value">0</div></div>
+      <div class="card"><div class="label">Best</div><div id="best" class="value">0</div></div>
+      <div class="card"><div class="label">Time</div><div id="time" class="value">30</div></div>
+    </div>
+
+    <div id="board" class="board" role="application" aria-label="Game board">
+      <div class="grid"></div>
+      <div id="overlay" class="overlay">
+        <div class="modal">
+          <div class="title">Ready to play?</div>
+          <div class="subtitle">Tap the glowing target as many times as you can in 30 seconds.</div>
+          <div class="footer">
+            <div class="progress"><div id="bar" class="bar"></div></div>
+            <button id="playBtn" class="btn" aria-label="Play now">Play</button>
+          </div>
+        </div>
+      </div>
+      <div id="target" class="target" aria-label="Target" style="left: 50%; top: 50%;">+1</div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const board = document.getElementById('board');
+      const target = document.getElementById('target');
+      const overlay = document.getElementById('overlay');
+      const playBtn = document.getElementById('playBtn');
+      const startBtn = document.getElementById('startBtn');
+
+      const scoreEl = document.getElementById('score');
+      const bestEl  = document.getElementById('best');
+      const timeEl  = document.getElementById('time');
+      const barEl   = document.getElementById('bar');
+
+      const DURATION = 30_000; // 30s
+      let score = 0;
+      let best  = Number(localStorage.getItem('tap_target_best') || 0);
+      let startTime = 0;
+      let playing = false;
+      let rafId = null;
+
+      bestEl.textContent = String(best);
+
+      function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+      function randomPos() {
+        const rect = board.getBoundingClientRect();
+        const size = target.offsetWidth;
+        const pad = 16 + size/2;
+        const x = Math.max(pad, Math.min(rect.width - pad, Math.random() * (rect.width - pad*2) + pad));
+        const y = Math.max(pad, Math.min(rect.height - pad, Math.random() * (rect.height - pad*2) + pad));
+        return { x, y };
+      }
+
+      function moveTarget(pop=true) {
+        const { x, y } = randomPos();
+        target.style.left = x + 'px';
+        target.style.top  = y + 'px';
+        if (pop) {
+          target.classList.remove('pop');
+          void target.offsetWidth;
+          target.classList.add('pop');
+        }
+      }
+
+      function hit() {
+        if (!playing) return;
+        score++;
+        scoreEl.textContent = String(score);
+        if (navigator.vibrate) navigator.vibrate(10);
+        target.textContent = '+' + ((score % 5 === 0) ? 3 : 1);
+        moveTarget(true);
+      }
+
+      function startGame() {
+        playing = true;
+        score = 0;
+        scoreEl.textContent = '0';
+        startTime = performance.now();
+        overlay.classList.remove('show');
+        timeEl.textContent = (DURATION/1000).toString();
+        barEl.style.transform = 'scaleX(1)';
+        moveTarget(false);
+        loop();
+      }
+
+      function endGame() {
+        playing = false;
+        cancelAnimationFrame(rafId);
+        if (score > best) {
+          best = score;
+          localStorage.setItem('tap_target_best', String(best));
+          bestEl.textContent = String(best);
+        }
+        overlay.querySelector('.title').textContent = 'Time! Your score: ' + score;
+        overlay.querySelector('.subtitle').textContent = score >= best ? '🔥 New best! Try to beat it again.' : 'Nice run — can you top your best?';
+        overlay.classList.add('show');
+      }
+
+      function loop(now) {
+        if (!playing) return;
+        const t = now || performance.now();
+        const elapsed = t - startTime;
+        const remaining = Math.max(0, DURATION - elapsed);
+        timeEl.textContent = Math.ceil(remaining / 1000).toString();
+        barEl.style.transform = 'scaleX(' + (remaining / DURATION).toFixed(4) + ')';
+        if (remaining <= 0) {
+          endGame();
+          return;
+        }
+        rafId = requestAnimationFrame(loop);
+      }
+
+      function showOverlay() {
+        overlay.querySelector('.title').textContent = 'Ready to play?';
+        overlay.querySelector('.subtitle').textContent = 'Tap the glowing target as many times as you can in 30 seconds.';
+        overlay.classList.add('show');
+      }
+
+      function onPointerDown(e) {
+        e.preventDefault();
+        hit();
+      }
+
+      target.addEventListener('pointerdown', onPointerDown, { passive: false });
+      playBtn.addEventListener('click', startGame);
+      startBtn.addEventListener('click', showOverlay);
+
+      showOverlay();
+      window.addEventListener('resize', () => moveTarget(false));
+      window.addEventListener('orientationchange', () => setTimeout(() => moveTarget(false), 150));
+
+      // Register service worker for PWA
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('service-worker.js').catch(console.error);
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
